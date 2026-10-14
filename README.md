@@ -47,3 +47,5 @@ Depois abra `http://localhost:8000`.
 ## Demo
 
 https://dashboardinvest.vercel.app/
+<img width="1903" height="1436" alt="Dashboard" src="https://github.com/user-attachments/assets/ae8aa889-b897-4e22-b7d4-47e08b7f14dc" />
+
