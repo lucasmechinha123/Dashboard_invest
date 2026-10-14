@@ -46,4 +46,4 @@ Depois abra `http://localhost:8000`.
 
 ## Demo
 
-[Adicione aqui o link do deploy na Vercel]
+https://dashboardinvest.vercel.app/
