@@ -5,14 +5,52 @@
 <title>Meus Investimentos</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="./style.css">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <meta name="theme-color" content="#000000">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Investimentos">
-
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#000;--card:#0e0e10;--line:#222;--tx:#f2f2f2;--mut:#8a8a93;--pos:#22c55e;--neg:#ef4444}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:var(--tx);font-family:-apple-system,system-ui,'Segoe UI',Roboto,sans-serif}
+#root{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 14px}
+h2{font-size:13px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.big{font-size:28px;font-weight:700}
+.sm{font-size:12px;color:var(--mut)}
+.pos{color:var(--pos)}.neg{color:var(--neg)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+input{width:100%;background:#000;color:var(--tx);border:1px solid #2a2a2e;border-radius:8px;padding:10px;font-size:16px}
+button{background:var(--pos);color:#000;border:0;border-radius:10px;padding:12px;font-weight:700;font-size:15px;width:100%;margin-top:10px}
+button.x{background:none;color:var(--mut);width:auto;padding:4px 8px;margin:0;font-size:14px}
+.grid button{margin-top:0}
+button.s{background:#1b1b1f;color:#f2f2f2;border:1px solid #2a2a2e}
+.mp{position:absolute;z-index:5;left:0;right:0;margin-top:6px;background:#0e0e10;border:1px solid #2a2a2e;border-radius:12px;padding:12px}
+.mg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.mg button{margin:0;padding:10px 0;font-size:14px}
+.mg button.on{background:var(--pos);color:#000;border-color:var(--pos)}
+.mg button.used{box-shadow:inset 0 -3px 0 var(--pos)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 8px}
+.seg button{margin:0;padding:10px;font-size:13px}
+.seg button.on{background:var(--pos);color:#000;border-color:var(--pos)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:430px}
+th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:600}
+.live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--pos);margin-right:6px;animation:p 1.4s infinite}
+@keyframes p{50%{opacity:.25}}
+@media(min-width:900px){#root{max-width:960px;padding:24px}h1{font-size:26px}.big{font-size:34px}.card{padding:18px}table{font-size:14px}}
+@media(max-width:420px){#root{padding:12px}.big{font-size:24px}.card{padding:12px}.grid{gap:8px}table{font-size:12px;min-width:380px}}
+@media(max-width:340px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <div id="root"></div>
@@ -20,7 +58,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script>
 const h=React.createElement,{useState,useEffect}=React;
-const CATS=['Reserva Emergencial','Bitcoin','Ethereum','USDC','Outros'];
+const CATS=['Reserva Emergencial','Renda Fixa','Ações','FIIs','Bitcoin','Ethereum','USDC','Outros'];
 const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct=n=>(n>=0?'+':'')+n.toFixed(2).replace('.',',')+'%';
 const cls=n=>n>=0?'pos':'neg';
@@ -90,15 +128,20 @@ function MonthPicker({value,onChange,used}){
 function App(){
   const[rows,setRows]=useState(load);
   const now=new Date().toISOString().slice(0,7);
-  const[m,setM]=useState(now),[v,setV]=useState({});
+  const[m,setM]=useState(now),[v,setV]=useState({}),[mode,setMode]=useState('add');
   const data=[...rows].sort((a,b)=>a.m.localeCompare(b.m));
   const last=data[data.length-1],prev=data[data.length-2];
   const T=last?tot(last):0;
   const gain=r=>{const i=data.indexOf(r);if(i<1)return null;const p=tot(data[i-1]);return{abs:tot(r)-p,pc:p?(tot(r)-p)/p*100:0}};
   const lg=last?gain(last):null;
+  const ex=data.find(r=>r.m===m),bf=data.filter(r=>r.m<m).pop(),bs=(ex||bf||{v:{}}).v;
   const add=()=>{
-    const rec={m,v};
-    const nr=[...rows.filter(r=>r.m!==m),rec];
+    const n={};
+    CATS.forEach(c=>{
+      const t=v[c],b=+bs[c]||0;
+      n[c]=(t===''||t===undefined)?b:(mode==='add'?b+(+t||0):(+t||0));
+    });
+    const nr=[...rows.filter(r=>r.m!==m),{m,v:n}];
     setRows(nr);save(nr);setV({});
   };
   const del=mm=>{const nr=rows.filter(r=>r.m!==mm);setRows(nr);save(nr)};
@@ -140,9 +183,14 @@ function App(){
     h('div',{className:'card'},
       h('h2',null,'Registrar mês'),
       h('label',null,'Mês'),h(MonthPicker,{value:m,onChange:setM,used:data.map(r=>r.m)}),
-      h('div',{className:'sm',style:{margin:'10px 0 4px'}},'Valor total de cada categoria neste mês'),
-      CATS.map(c=>h('div',{key:c,style:{marginTop:8}},h('label',null,c+' (R$)'),
-        h('input',{type:'number',inputMode:'decimal',value:v[c]||'',onChange:e=>setV({...v,[c]:e.target.value})}))),
+      h('div',{className:'seg'},
+        h('button',{className:'s'+(mode==='add'?' on':''),onClick:()=>setMode('add')},'Somar ao atual'),
+        h('button',{className:'s'+(mode==='total'?' on':''),onClick:()=>setMode('total')},'Valor total')),
+      h('div',{className:'sm'},mode==='add'
+        ?'Digite quanto entrou (use − se saiu ou caiu). O valor é somado ao que já existe. Campo vazio = não muda.'
+        :'Digite o valor total que a categoria tem agora. Campo vazio = não muda.'),
+      CATS.map(c=>h('div',{key:c,style:{marginTop:8}},h('label',null,c+' · atual '+brl(+bs[c]||0)),
+        h('input',{type:'number',inputMode:'decimal',placeholder:mode==='add'?'+ valor':'valor total',value:v[c]||'',onChange:e=>setV({...v,[c]:e.target.value})}))),
       h('button',{onClick:add},'Salvar mês')),
     data.length>0&&h('div',{className:'card'},
       h('h2',null,'Histórico'),
