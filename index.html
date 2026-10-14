@@ -20,7 +20,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script>
 const h=React.createElement,{useState,useEffect}=React;
-const CATS=['Reserva Emergencial','Renda Fixa','Ações','FIIs','Bitcoin','Ethereum','USDC','Outros'];
+const CATS=['Reserva Emergencial','Bitcoin','Ethereum','USDC','Outros'];
 const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct=n=>(n>=0?'+':'')+n.toFixed(2).replace('.',',')+'%';
 const cls=n=>n>=0?'pos':'neg';
