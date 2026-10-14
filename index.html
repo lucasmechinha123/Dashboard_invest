@@ -13,7 +13,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Investimentos">
-
 </head>
 <body>
 <div id="root"></div>
@@ -21,7 +20,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script>
 const h=React.createElement,{useState,useEffect}=React;
-const CATS=['Reserva Emergencial','Bitcoin','Ethereum','USDC','Outros'];
+const CATS=['Reserva Emergencial','Renda Fixa','Ações','FIIs','Bitcoin','Ethereum','USDC','Outros'];
 const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct=n=>(n>=0?'+':'')+n.toFixed(2).replace('.',',')+'%';
 const cls=n=>n>=0?'pos':'neg';
@@ -91,7 +90,7 @@ function MonthPicker({value,onChange,used}){
 function App(){
   const[rows,setRows]=useState(load);
   const now=new Date().toISOString().slice(0,7);
-  const[m,setM]=useState(now),[v,setV]=useState({}),[mode,setMode]=useState('add');
+  const[m,setM]=useState(now),[v,setV]=useState({});
   const data=[...rows].sort((a,b)=>a.m.localeCompare(b.m));
   const last=data[data.length-1],prev=data[data.length-2];
   const T=last?tot(last):0;
@@ -102,7 +101,7 @@ function App(){
     const n={};
     CATS.forEach(c=>{
       const t=v[c],b=+bs[c]||0;
-      n[c]=(t===''||t===undefined)?b:(mode==='add'?b+(+t||0):(+t||0));
+      n[c]=(t===''||t===undefined)?b:b+(+t||0);
     });
     const nr=[...rows.filter(r=>r.m!==m),{m,v:n}];
     setRows(nr);save(nr);setV({});
@@ -146,14 +145,9 @@ function App(){
     h('div',{className:'card'},
       h('h2',null,'Registrar mês'),
       h('label',null,'Mês'),h(MonthPicker,{value:m,onChange:setM,used:data.map(r=>r.m)}),
-      h('div',{className:'seg'},
-        h('button',{className:'s'+(mode==='add'?' on':''),onClick:()=>setMode('add')},'Somar ao atual'),
-        h('button',{className:'s'+(mode==='total'?' on':''),onClick:()=>setMode('total')},'Valor total')),
-      h('div',{className:'sm'},mode==='add'
-        ?'Digite quanto entrou (use − se saiu ou caiu). O valor é somado ao que já existe. Campo vazio = não muda.'
-        :'Digite o valor total que a categoria tem agora. Campo vazio = não muda.'),
+      h('div',{className:'sm',style:{margin:'10px 0 4px'}},'Digite quanto entrou em cada categoria. O valor é somado ao mês anterior. Se caiu ou saiu dinheiro, use sinal de menos (ex: -150). Campo vazio = não muda.'),
       CATS.map(c=>h('div',{key:c,style:{marginTop:8}},h('label',null,c+' · atual '+brl(+bs[c]||0)),
-        h('input',{type:'number',inputMode:'decimal',placeholder:mode==='add'?'+ valor':'valor total',value:v[c]||'',onChange:e=>setV({...v,[c]:e.target.value})}))),
+        h('input',{type:'number',inputMode:'decimal',placeholder:'+ valor',value:v[c]||'',onChange:e=>setV({...v,[c]:e.target.value})}))),
       h('button',{onClick:add},'Salvar mês')),
     data.length>0&&h('div',{className:'card'},
       h('h2',null,'Histórico'),
