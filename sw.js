@@ -1,4 +1,4 @@
-const CACHE = "invest-v7";
+const CACHE = "invest-v11";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -15,9 +15,25 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  // Cotação sempre da rede (nunca cacheada)
-  if (url.hostname.includes("coingecko.com")) return;
+  // Cotações sempre da rede (nunca cacheadas)
+  if (/coingecko|binance/.test(url.hostname)) return;
   if (e.request.method !== "GET") return;
+
+  // Página principal: tenta a rede primeiro (pega sempre a versão nova); offline usa o cache
+  if (e.request.mode === "navigate" || url.pathname.endsWith("/") || url.pathname.endsWith("index.html")) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put("./index.html", copy));
+          return res;
+        })
+        .catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
+  // Demais arquivos: cache primeiro
   e.respondWith(
     caches.match(e.request).then((hit) =>
       hit ||

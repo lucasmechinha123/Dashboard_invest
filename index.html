@@ -5,7 +5,7 @@
 <title>Meus Investimentos</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
- <link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./style.css">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <meta name="theme-color" content="#000000">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -13,50 +13,101 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Investimentos">
+
 </head>
 <body>
 <div id="root"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const h=React.createElement,{useState,useEffect}=React;
-const CATS=['Reserva Emergencial','Bitcoin','Ethereum','USDC'];
+const DEF=['Reserva Emergencial','Bitcoin','Ethereum','USDC'];
+const COINS=[['BTC','Bitcoin'],['ETH','Ethereum'],['BNB','BNB'],['SOL','Solana'],['USDC','USDC']];
+const MN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MF=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct=n=>(n>=0?'+':'')+n.toFixed(2).replace('.',',')+'%';
 const cls=n=>n>=0?'pos':'neg';
 const tot=r=>Object.values(r.v).reduce((s,x)=>s+(+x||0),0);
-function load(){try{return JSON.parse(localStorage.getItem('inv')||'[]')}catch(e){return[]}}
-function save(d){try{localStorage.setItem('inv',JSON.stringify(d))}catch(e){}}
+const mk=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+const mname=k=>MF[+k.slice(5,7)-1]+' '+k.slice(0,4);
+function rd(k,d){try{const x=JSON.parse(localStorage.getItem(k));return x==null?d:x}catch(e){return d}}
+function wr(k,x){try{localStorage.setItem(k,JSON.stringify(x))}catch(e){}}
 
+/* ---------- Binance ---------- */
+async function getJ(u){const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json()}
+async function binance(){
+  const syms=COINS.map(c=>c[0]+'USDT').concat(['USDTBRL']);
+  const q='/api/v3/ticker/24hr?symbols='+encodeURIComponent(JSON.stringify(syms));
+  let j;
+  try{j=await getJ('https://api.binance.com'+q)}catch(e){j=await getJ('https://data-api.binance.vision'+q)}
+  const m={};j.forEach(x=>{m[x.symbol]=x});
+  const fx=+m.USDTBRL.lastPrice,out={};
+  COINS.forEach(([s])=>{const x=m[s+'USDT'];if(x)out[s]={usd:+x.lastPrice,brl:+x.lastPrice*fx,ch:+x.priceChangePercent}});
+  return out;
+}
 function Crypto(){
   const[d,setD]=useState(null),[err,setErr]=useState(false),[t,setT]=useState(null);
+  const[hid,setHid]=useState(()=>{const x=rd('hc',[]);return Array.isArray(x)?x:[]});
+  const setH=x=>{setHid(x);wr('hc',x)};
   useEffect(()=>{
     let on=true;
-    const go=async()=>{try{
-      const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=brl,usd&include_24hr_change=true');
-      const j=await r.json();
-      if(on){setD(j);setErr(false);setT(new Date())}
-    }catch(e){if(on)setErr(true)}};
+    const go=async()=>{try{const x=await binance();if(on){setD(x);setErr(false);setT(new Date())}}catch(e){if(on)setErr(true)}};
     go();const i=setInterval(go,30000);
     return()=>{on=false;clearInterval(i)};
   },[]);
-  const coin=(id,name)=>{
-    const c=d&&d[id];
-    return h('div',{className:'card',style:{marginBottom:0}},
-      h('div',{className:'sm'},name),
+  const fu=n=>n.toLocaleString('en-US',{maximumFractionDigits:n<10?4:2});
+  const coin=([s,name])=>{
+    const c=d&&d[s];
+    return h('div',{key:s,className:'card',style:{marginBottom:0}},
+      h('div',{className:'row'},h('div',{className:'sm'},name+' ('+s+')'),h('button',{className:'x del',title:'Ocultar',style:{padding:'0 4px'},onClick:()=>setH([...hid,s])},'✕')),
       c?h('div',null,
         h('div',{className:'big',style:{fontSize:20}},brl(c.brl)),
-        h('div',{className:'sm'},'US$ '+c.usd.toLocaleString('en-US')),
-        h('div',{className:cls(c.brl_24h_change),style:{fontWeight:700,marginTop:4}},pct(c.brl_24h_change)+' (24h)'))
+        h('div',{className:'sm'},'US$ '+fu(c.usd)),
+        h('div',{className:cls(c.ch),style:{fontWeight:700,marginTop:4}},pct(c.ch)+' (24h)'))
       :h('div',{className:'sm',style:{marginTop:8}},err?'indisponível':'carregando…'));
   };
   return h('div',{className:'card'},
-    h('h2',null,h('span',{className:'live'}),'Cripto ao vivo'),
-    h('div',{className:'grid'},coin('bitcoin','Bitcoin (BTC)'),coin('ethereum','Ethereum (ETH)')),
-    err&&h('div',{className:'sm',style:{marginTop:10}},'Não foi possível buscar os preços. Esta página hospedada bloqueia acesso externo; a cotação funciona quando o arquivo roda no seu próprio site/navegador.'),
-    t&&!err&&h('div',{className:'sm',style:{marginTop:10}},'Atualizado às '+t.toLocaleTimeString('pt-BR')+' · a cada 30s'));
+    h('h2',null,h('span',{className:'live'}),'Cripto ao vivo · Binance'),
+    h('div',{className:'cg'},COINS.filter(c=>!hid.includes(c[0])).map(coin)),
+    hid.length>0&&h('button',{className:'s',style:{marginTop:10},onClick:()=>setH([])},'Mostrar moedas ocultas ('+hid.length+')'),
+    err&&h('div',{className:'sm',style:{marginTop:10}},'Não foi possível buscar os preços agora. Tentando de novo em instantes.'),
+    t&&!err&&h('div',{className:'sm',style:{marginTop:10}},'Atualizado às '+t.toLocaleTimeString('pt-BR')+' · a cada 30s · preço em R$ calculado pelo par USDT/BRL'));
 }
 
+/* ---------- Excel ---------- */
+function fmt(ws,n,mc,pc){
+  for(let R=1;R<n;R++){
+    mc.forEach(C=>{const c=ws[XLSX.utils.encode_cell({r:R,c:C})];if(c&&typeof c.v==='number')c.z='"R$" #,##0.00'});
+    const c=ws[XLSX.utils.encode_cell({r:R,c:pc})];if(c&&typeof c.v==='number')c.z='0.00%';
+  }
+}
+function exportXlsx(data,cats,k){
+  if(typeof XLSX==='undefined'){alert('A biblioteca do Excel não carregou. Verifique a internet e recarregue a página.');return}
+  const i=data.findIndex(r=>r.m===k);if(i<0)return;
+  const r=data[i],p=i>0?data[i-1]:null;
+  const line=(n,a,b)=>[n,a,b,a===null?null:b-a,a?(b-a)/a:null];
+  const A=[['Categoria','Mês anterior (R$)','Valor do mês (R$)','Variação (R$)','Variação (%)']];
+  cats.forEach(c=>A.push(line(c,p?(+p.v[c]||0):null,+r.v[c]||0)));
+  A.push(line('TOTAL',p?tot(p):null,tot(r)));
+  const ws=XLSX.utils.aoa_to_sheet(A);
+  fmt(ws,A.length,[1,2,3],4);
+  ws['!cols']=[{wch:26},{wch:20},{wch:20},{wch:16},{wch:14}];
+  const B=[['Mês',...cats,'Total','Variação (R$)','Variação (%)']];
+  data.forEach((x,j)=>{const t=tot(x),pt=j>0?tot(data[j-1]):null;
+    B.push([x.m,...cats.map(c=>+x.v[c]||0),t,pt===null?null:t-pt,pt?(t-pt)/pt:null])});
+  const ws2=XLSX.utils.aoa_to_sheet(B),nc=cats.length,mc=[];
+  for(let c=1;c<=nc+2;c++)mc.push(c);
+  fmt(ws2,B.length,mc,nc+3);
+  ws2['!cols']=[{wch:10},...cats.map(()=>({wch:16})),{wch:16},{wch:16},{wch:14}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,mname(k));
+  XLSX.utils.book_append_sheet(wb,ws2,'Histórico');
+  XLSX.writeFile(wb,'investimentos-'+k+'.xlsx');
+}
+
+/* ---------- Gráfico e calendário ---------- */
 function Chart({data}){
   if(data.length<2)return h('div',{className:'sm'},'Adicione pelo menos 2 meses para ver o gráfico.');
   const W=600,H=180,P=14,vs=data.map(tot),mn=Math.min(...vs),mx=Math.max(...vs),rg=(mx-mn)||1;
@@ -68,8 +119,6 @@ function Chart({data}){
     h('text',{x:P,y:H+12,fill:'#8a8a93',fontSize:12},data[0].m),
     h('text',{x:W-P,y:H+12,fill:'#8a8a93',fontSize:12,textAnchor:'end'},data[data.length-1].m));
 }
-
-const MN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 function MonthPicker({value,onChange,used}){
   const[open,setOpen]=useState(false);
   const[y,setY]=useState(+value.slice(0,4));
@@ -87,41 +136,81 @@ function MonthPicker({value,onChange,used}){
       h('div',{className:'sm',style:{marginTop:8}},'Sublinhado verde = mês já registrado')));
 }
 
+/* ---------- App ---------- */
 function App(){
-  const[rows,setRows]=useState(load);
-  const now=new Date().toISOString().slice(0,7);
+  const[rows,setRows]=useState(()=>{const x=rd('inv',[]);return Array.isArray(x)?x:[]});
+  const[cats,setCats]=useState(()=>{const x=rd('cats',DEF);return Array.isArray(x)&&x.length?x:DEF});
+  const[lastExp,setLastExp]=useState(()=>rd('lastExp',''));
+  const[hide,setHide]=useState(false),[nc,setNc]=useState('');
+  const[pend,setPend]=useState(null),[ed,setEd]=useState(null),[cmsg,setCmsg]=useState('');
+  const now=mk(new Date());
   const[m,setM]=useState(now),[v,setV]=useState({});
+  const pm=(()=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return mk(d)})();
+
+  const saveRows=nr=>{setRows(nr);wr('inv',nr)};
+  const saveCats=nx=>{setCats(nx);wr('cats',nx)};
+
   const data=[...rows].sort((a,b)=>a.m.localeCompare(b.m));
   const last=data[data.length-1],prev=data[data.length-2];
   const T=last?tot(last):0;
   const gain=r=>{const i=data.indexOf(r);if(i<1)return null;const p=tot(data[i-1]);return{abs:tot(r)-p,pc:p?(tot(r)-p)/p*100:0}};
   const lg=last?gain(last):null;
   const ex=data.find(r=>r.m===m),bf=data.filter(r=>r.m<m).pop(),bs=(ex||bf||{v:{}}).v;
+
   const add=()=>{
     const n={};
-    CATS.forEach(c=>{
-      const t=v[c],b=+bs[c]||0;
-      n[c]=(t===''||t===undefined)?b:b+(+t||0);
-    });
-    const nr=[...rows.filter(r=>r.m!==m),{m,v:n}];
-    setRows(nr);save(nr);setV({});
+    cats.forEach(c=>{const t=v[c],b=+bs[c]||0;n[c]=(t===''||t===undefined)?b:b+(+t||0)});
+    saveRows([...rows.filter(r=>r.m!==m),{m,v:n}]);setV({});
   };
-  const del=mm=>{const nr=rows.filter(r=>r.m!==mm);setRows(nr);save(nr)};
+  const del=mm=>{setPend(null);saveRows(rows.filter(r=>r.m!==mm))};
+  const addCat=()=>{
+    const n=nc.trim().slice(0,30);
+    if(!n)return;
+    if(cats.some(c=>c.toLowerCase()===n.toLowerCase())){setCmsg('Essa categoria já existe.');return}
+    setCmsg('');saveCats([...cats,n]);setNc('');
+  };
+  const rmCat=c=>{
+    setPend(null);
+    saveCats(cats.filter(x=>x!==c));
+    saveRows(rows.map(r=>{const v2={...r.v};delete v2[c];return{...r,v:v2}}));
+  };
+  const doRen=()=>{
+    const c=ed.c,n=ed.val.trim().slice(0,30);
+    if(!n||n===c){setEd(null);return}
+    if(cats.some(x=>x.toLowerCase()===n.toLowerCase())){setCmsg('Essa categoria já existe.');return}
+    setCmsg('');
+    saveCats(cats.map(x=>x===c?n:x));
+    saveRows(rows.map(r=>{const v2={};Object.keys(r.v).forEach(k=>{v2[k===c?n:k]=r.v[k]});return{...r,v:v2}}));
+    setEd(null);
+  };
   const demo=()=>{
-    const B={'Reserva Emergencial':15000,'Renda Fixa':22000,'Ações':12000,'FIIs':8000,'Bitcoin':6000,'Ethereum':3000,'USDC':2000,'Outros':1000};
-    const G={'Reserva Emergencial':[0,.008,.008,.009,.008,.009],'Renda Fixa':[0,.009,.01,.009,.01,.009],'Ações':[0,.02,-.03,.04,.01,-.02],'FIIs':[0,.01,.005,-.01,.012,.008],'Bitcoin':[0,.09,-.12,.15,.05,-.08],'Ethereum':[0,.11,-.15,.12,.07,-.1],'USDC':[0,0,0,0,0,0],'Outros':[0,.01,0,.01,0,.01]};
-    const now=new Date(),out=[];let cur={...B};
+    const B={'Reserva Emergencial':15000,'Bitcoin':6000,'Ethereum':3000,'USDC':2000};
+    const G={'Reserva Emergencial':[0,.008,.008,.009,.008,.009],'Bitcoin':[0,.09,-.12,.15,.05,-.08],'Ethereum':[0,.11,-.15,.12,.07,-.1],'USDC':[0,0,0,0,0,0]};
+    const d0=new Date(),out=[];let cur={...B};
     for(let i=0;i<6;i++){
-      const d=new Date(now.getFullYear(),now.getMonth()-(5-i),1);
-      const mm=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-      if(i>0){const n={};CATS.forEach(c=>{n[c]=Math.round(cur[c]*(1+G[c][i]))});cur=n}
-      out.push({m:mm,v:{...cur}});
+      const d=new Date(d0.getFullYear(),d0.getMonth()-(5-i),1);
+      if(i>0){const n={};DEF.forEach(c=>{n[c]=Math.round(cur[c]*(1+G[c][i]))});cur=n}
+      out.push({m:mk(d),v:{...cur}});
     }
-    setRows(out);save(out);
+    saveCats(DEF);saveRows(out);
   };
-  const clr=()=>{if(confirm('Apagar todos os dados deste aparelho?')){setRows([]);save([])}};
+  const clr=()=>{setPend(null);saveRows([])};
+  const yn=(label,onYes)=>h('span',{style:{whiteSpace:'nowrap'}},
+    h('span',{className:'sm'},label+' '),
+    h('button',{className:'x del',onClick:onYes},'Sim'),
+    h('button',{className:'x',onClick:()=>setPend(null)},'Não'));
+
+  const showB=!hide&&data.some(r=>r.m===pm)&&lastExp<pm;
+  const doB=()=>{exportXlsx(data,cats,pm);wr('lastExp',pm);setLastExp(pm)};
+  const skip=()=>{wr('lastExp',pm);setLastExp(pm);setHide(true)};
+
   return h('div',null,
     h('h1',null,'📊 Meus Investimentos'),
+    showB&&h('div',{className:'card',style:{borderColor:'#165c2f'}},
+      h('h2',null,'📅 Mês encerrado'),
+      h('div',null,'O mês de '+mname(pm)+' terminou. Baixe a planilha com o resumo.'),
+      h('button',{onClick:doB},'⬇ Baixar Excel de '+mname(pm)),
+      h('button',{className:'s',onClick:skip},'Agora não')),
     data.length===0&&h('div',{className:'card'},
       h('h2',null,'Explorar'),
       h('div',{className:'sm'},'Painel vazio. Veja como funciona com dados fictícios.'),
@@ -134,7 +223,7 @@ function App(){
         :h('div',{className:'sm'},last?'Registre mais um mês para ver a variação':'Nenhum mês registrado ainda')),
     last&&h('div',{className:'card'},
       h('h2',null,'Por categoria · '+last.m),
-      CATS.map(c=>{
+      cats.map(c=>{
         const cur=+last.v[c]||0,pv=prev?(+prev.v[c]||0):null;
         const d=pv===null?null:cur-pv;
         return h('div',{key:c,className:'row',style:{padding:'6px 0',borderBottom:'1px solid #222'}},
@@ -145,9 +234,29 @@ function App(){
     h('div',{className:'card'},
       h('h2',null,'Registrar mês'),
       h('label',null,'Mês'),h(MonthPicker,{value:m,onChange:setM,used:data.map(r=>r.m)}),
-      h('div',{className:'sm',style:{margin:'10px 0 4px'}},'Digite quanto entrou em cada categoria. O valor é somado ao mês anterior. Se caiu ou saiu dinheiro, use sinal de menos (ex: -150). Campo vazio = não muda.'),
-      CATS.map(c=>h('div',{key:c,style:{marginTop:8}},h('label',null,c+' · atual '+brl(+bs[c]||0)),
-        h('input',{type:'number',inputMode:'decimal',placeholder:'+ valor',value:v[c]||'',onChange:e=>setV({...v,[c]:e.target.value})}))),
+      h('div',{className:'sm',style:{margin:'10px 0 4px'}},'Digite quanto entrou em cada categoria. O valor é somado ao mês anterior. Se caiu ou saiu dinheiro, use sinal de menos (ex: -150). Campo vazio = não muda. Use ✎ para renomear, ✕ para remover ou adicione uma nova categoria no fim da lista.'),
+      cats.map(c=>h('div',{key:c,style:{marginTop:10}},
+        ed&&ed.c===c
+        ?h('div',null,h('label',null,'Novo nome para '+c),
+            h('div',{className:'row'},
+              h('input',{value:ed.val,maxLength:30,autoFocus:true,onChange:e=>setEd({c,val:e.target.value}),onKeyDown:e=>{if(e.key==='Enter')doRen()}}),
+              h('button',{className:'s',style:{width:'auto',marginTop:0,padding:'10px 14px'},onClick:doRen},'OK'),
+              h('button',{className:'x',onClick:()=>{setEd(null);setCmsg('')}},'Cancelar')))
+        :h('div',null,
+            h('div',{className:'row'},
+              h('label',{style:{margin:0}},c+' · atual '+brl(+bs[c]||0)),
+              pend==='cat:'+c
+                ?yn('Apagar?',()=>rmCat(c))
+                :h('span',{style:{whiteSpace:'nowrap'}},
+                    h('button',{className:'x',title:'Renomear',onClick:()=>{setEd({c,val:c});setCmsg('')}},'✎'),
+                    h('button',{className:'x del',title:'Remover',onClick:()=>setPend('cat:'+c)},'✕'))),
+            h('input',{type:'number',inputMode:'decimal',placeholder:'+ valor',value:v[c]||'',style:{marginTop:4},onChange:e=>setV({...v,[c]:e.target.value})})))),
+      h('div',{style:{marginTop:14,paddingTop:12,borderTop:'1px solid #222'}},
+        h('label',null,'Nova categoria'),
+        h('div',{className:'row'},
+          h('input',{value:nc,maxLength:30,placeholder:'Ex: Tesouro, Ouro, Dólar',onChange:e=>setNc(e.target.value),onKeyDown:e=>{if(e.key==='Enter')addCat()}}),
+          h('button',{className:'s',onClick:addCat,style:{width:'auto',marginTop:0,padding:'10px 16px'}},'Adicionar')),
+        cmsg&&h('div',{style:{color:'#ef4444',fontSize:12,marginTop:6}},cmsg)),
       h('button',{onClick:add},'Salvar mês')),
     data.length>0&&h('div',{className:'card'},
       h('h2',null,'Histórico'),
@@ -156,10 +265,12 @@ function App(){
         h('tbody',null,[...data].reverse().map(r=>{const g=gain(r);return h('tr',{key:r.m},
           h('td',null,r.m),h('td',null,brl(tot(r))),
           h('td',{className:g?cls(g.abs):''},g?pct(g.pc):'—'),
-          h('td',null,h('button',{className:'x',onClick:()=>del(r.m)},'✕')))}))))),
+          h('td',{style:{whiteSpace:'nowrap'}},
+            h('button',{className:'x',title:'Baixar Excel deste mês',onClick:()=>exportXlsx(data,cats,r.m)},'⬇ Excel'),
+            (pend==='mes:'+r.m?yn('Apagar?',()=>del(r.m)):h('button',{className:'x del',title:'Apagar mês',onClick:()=>setPend('mes:'+r.m)},'✕'))))}))))),
     h('div',{className:'card'},
       h('h2',null,'Dados'),
-      h('button',{className:'s',onClick:clr,style:{color:'#ef4444'}},'Limpar todos os dados'),
+      pend==='all'?h('div',{className:'row'},h('span',null,'Apagar todos os dados deste aparelho?'),h('span',{style:{whiteSpace:'nowrap'}},h('button',{className:'x del',onClick:clr},'Sim'),h('button',{className:'x',onClick:()=>setPend(null)},'Não'))):h('button',{className:'s',onClick:()=>setPend('all'),style:{color:'#ef4444'}},'Limpar todos os dados'),
       h('div',{className:'sm',style:{marginTop:8}},'Dados salvos apenas neste dispositivo. Limpar o histórico do navegador apaga tudo.')));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(h(App));
