@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Meus Investimentos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="./style.css">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Investimentos">
+
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+const h=React.createElement,{useState,useEffect}=React;
+const CATS=['Reserva Emergencial','Bitcoin','Ethereum','USDC','Outros'];
+const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const pct=n=>(n>=0?'+':'')+n.toFixed(2).replace('.',',')+'%';
+const cls=n=>n>=0?'pos':'neg';
+const tot=r=>Object.values(r.v).reduce((s,x)=>s+(+x||0),0);
+function load(){try{return JSON.parse(localStorage.getItem('inv')||'[]')}catch(e){return[]}}
+function save(d){try{localStorage.setItem('inv',JSON.stringify(d))}catch(e){}}
+
+function Crypto(){
+  const[d,setD]=useState(null),[err,setErr]=useState(false),[t,setT]=useState(null);
+  useEffect(()=>{
+    let on=true;
+    const go=async()=>{try{
+      const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=brl,usd&include_24hr_change=true');
+      const j=await r.json();
+      if(on){setD(j);setErr(false);setT(new Date())}
+    }catch(e){if(on)setErr(true)}};
+    go();const i=setInterval(go,30000);
+    return()=>{on=false;clearInterval(i)};
+  },[]);
+  const coin=(id,name)=>{
+    const c=d&&d[id];
+    return h('div',{className:'card',style:{marginBottom:0}},
+      h('div',{className:'sm'},name),
+      c?h('div',null,
+        h('div',{className:'big',style:{fontSize:20}},brl(c.brl)),
+        h('div',{className:'sm'},'US$ '+c.usd.toLocaleString('en-US')),
+        h('div',{className:cls(c.brl_24h_change),style:{fontWeight:700,marginTop:4}},pct(c.brl_24h_change)+' (24h)'))
+      :h('div',{className:'sm',style:{marginTop:8}},err?'indisponível':'carregando…'));
+  };
+  return h('div',{className:'card'},
+    h('h2',null,h('span',{className:'live'}),'Cripto ao vivo'),
+    h('div',{className:'grid'},coin('bitcoin','Bitcoin (BTC)'),coin('ethereum','Ethereum (ETH)')),
+    err&&h('div',{className:'sm',style:{marginTop:10}},'Não foi possível buscar os preços. Esta página hospedada bloqueia acesso externo; a cotação funciona quando o arquivo roda no seu próprio site/navegador.'),
+    t&&!err&&h('div',{className:'sm',style:{marginTop:10}},'Atualizado às '+t.toLocaleTimeString('pt-BR')+' · a cada 30s'));
+}
+
+function Chart({data}){
+  if(data.length<2)return h('div',{className:'sm'},'Adicione pelo menos 2 meses para ver o gráfico.');
+  const W=600,H=180,P=14,vs=data.map(tot),mn=Math.min(...vs),mx=Math.max(...vs),rg=(mx-mn)||1;
+  const pts=vs.map((v,i)=>[P+i*(W-2*P)/(vs.length-1),H-P-(v-mn)/rg*(H-2*P)]);
+  const col=vs[vs.length-1]>=vs[0]?'#22c55e':'#ef4444';
+  return h('svg',{viewBox:`0 0 ${W} ${H+16}`,width:'100%'},
+    h('polyline',{points:pts.map(p=>p.join(',')).join(' '),fill:'none',stroke:col,strokeWidth:3}),
+    pts.map((p,i)=>h('circle',{key:i,cx:p[0],cy:p[1],r:4,fill:col})),
+    h('text',{x:P,y:H+12,fill:'#8a8a93',fontSize:12},data[0].m),
+    h('text',{x:W-P,y:H+12,fill:'#8a8a93',fontSize:12,textAnchor:'end'},data[data.length-1].m));
+}
+
+const MN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function MonthPicker({value,onChange,used}){
+  const[open,setOpen]=useState(false);
+  const[y,setY]=useState(+value.slice(0,4));
+  return h('div',{style:{position:'relative'}},
+    h('button',{className:'s',style:{marginTop:0,textAlign:'left'},onClick:()=>{setY(+value.slice(0,4));setOpen(!open)}},'📅 '+MN[+value.slice(5,7)-1]+' / '+value.slice(0,4)),
+    open&&h('div',{className:'mp'},
+      h('div',{className:'row',style:{marginBottom:8}},
+        h('button',{className:'x',onClick:()=>setY(y-1)},'◀'),
+        h('b',null,y),
+        h('button',{className:'x',onClick:()=>setY(y+1)},'▶')),
+      h('div',{className:'mg'},MN.map((n,i)=>{
+        const k=y+'-'+String(i+1).padStart(2,'0');
+        return h('button',{key:k,className:'s'+(k===value?' on':'')+(used.includes(k)?' used':''),onClick:()=>{onChange(k);setOpen(false)}},n);
+      })),
+      h('div',{className:'sm',style:{marginTop:8}},'Sublinhado verde = mês já registrado')));
+}
+
+function App(){
+  const[rows,setRows]=useState(load);
+  const now=new Date().toISOString().slice(0,7);
+  const[m,setM]=useState(now),[v,setV]=useState({});
+  const data=[...rows].sort((a,b)=>a.m.localeCompare(b.m));
+  const last=data[data.length-1],prev=data[data.length-2];
+  const T=last?tot(last):0;
+  const gain=r=>{const i=data.indexOf(r);if(i<1)return null;const p=tot(data[i-1]);return{abs:tot(r)-p,pc:p?(tot(r)-p)/p*100:0}};
+  const lg=last?gain(last):null;
+  const add=()=>{
+    const rec={m,v};
+    const nr=[...rows.filter(r=>r.m!==m),rec];
+    setRows(nr);save(nr);setV({});
+  };
+  const del=mm=>{const nr=rows.filter(r=>r.m!==mm);setRows(nr);save(nr)};
+  const demo=()=>{
+    const B={'Reserva Emergencial':15000,'Renda Fixa':22000,'Ações':12000,'FIIs':8000,'Bitcoin':6000,'Ethereum':3000,'USDC':2000,'Outros':1000};
+    const G={'Reserva Emergencial':[0,.008,.008,.009,.008,.009],'Renda Fixa':[0,.009,.01,.009,.01,.009],'Ações':[0,.02,-.03,.04,.01,-.02],'FIIs':[0,.01,.005,-.01,.012,.008],'Bitcoin':[0,.09,-.12,.15,.05,-.08],'Ethereum':[0,.11,-.15,.12,.07,-.1],'USDC':[0,0,0,0,0,0],'Outros':[0,.01,0,.01,0,.01]};
+    const now=new Date(),out=[];let cur={...B};
+    for(let i=0;i<6;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()-(5-i),1);
+      const mm=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      if(i>0){const n={};CATS.forEach(c=>{n[c]=Math.round(cur[c]*(1+G[c][i]))});cur=n}
+      out.push({m:mm,v:{...cur}});
+    }
+    setRows(out);save(out);
+  };
+  const clr=()=>{if(confirm('Apagar todos os dados deste aparelho?')){setRows([]);save([])}};
+  return h('div',null,
+    h('h1',null,'📊 Meus Investimentos'),
+    data.length===0&&h('div',{className:'card'},
+      h('h2',null,'Explorar'),
+      h('div',{className:'sm'},'Painel vazio. Veja como funciona com dados fictícios.'),
+      h('button',{onClick:demo},'Carregar dados de exemplo')),
+    h(Crypto),
+    h('div',{className:'card'},
+      h('h2',null,'Patrimônio atual'),
+      h('div',{className:'big'},brl(T)),
+      lg?h('div',{className:cls(lg.abs),style:{fontWeight:700,marginTop:4}},(lg.abs>=0?'+':'')+brl(lg.abs)+' ('+pct(lg.pc)+') no último mês')
+        :h('div',{className:'sm'},last?'Registre mais um mês para ver a variação':'Nenhum mês registrado ainda')),
+    last&&h('div',{className:'card'},
+      h('h2',null,'Por categoria · '+last.m),
+      CATS.map(c=>{
+        const cur=+last.v[c]||0,pv=prev?(+prev.v[c]||0):null;
+        const d=pv===null?null:cur-pv;
+        return h('div',{key:c,className:'row',style:{padding:'6px 0',borderBottom:'1px solid #222'}},
+          h('span',null,c),
+          h('span',null,brl(cur),d!==null&&h('span',{className:cls(d),style:{marginLeft:8,fontSize:12}},(d>=0?'▲ ':'▼ ')+brl(Math.abs(d)))));
+      })),
+    h('div',{className:'card'},h('h2',null,'Evolução do patrimônio'),h(Chart,{data})),
+    h('div',{className:'card'},
+      h('h2',null,'Registrar mês'),
+      h('label',null,'Mês'),h(MonthPicker,{value:m,onChange:setM,used:data.map(r=>r.m)}),
+      h('div',{className:'sm',style:{margin:'10px 0 4px'}},'Valor total de cada categoria neste mês'),
+      CATS.map(c=>h('div',{key:c,style:{marginTop:8}},h('label',null,c+' (R$)'),
+        h('input',{type:'number',inputMode:'decimal',value:v[c]||'',onChange:e=>setV({...v,[c]:e.target.value})}))),
+      h('button',{onClick:add},'Salvar mês')),
+    data.length>0&&h('div',{className:'card'},
+      h('h2',null,'Histórico'),
+      h('div',{className:'tw'},h('table',null,
+        h('thead',null,h('tr',null,['Mês','Total','Variação',''].map((x,i)=>h('th',{key:i},x)))),
+        h('tbody',null,[...data].reverse().map(r=>{const g=gain(r);return h('tr',{key:r.m},
+          h('td',null,r.m),h('td',null,brl(tot(r))),
+          h('td',{className:g?cls(g.abs):''},g?pct(g.pc):'—'),
+          h('td',null,h('button',{className:'x',onClick:()=>del(r.m)},'✕')))}))))),
+    h('div',{className:'card'},
+      h('h2',null,'Dados'),
+      h('button',{className:'s',onClick:clr,style:{color:'#ef4444'}},'Limpar todos os dados'),
+      h('div',{className:'sm',style:{marginTop:8}},'Dados salvos apenas neste dispositivo. Limpar o histórico do navegador apaga tudo.')));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}</script>
+</body>
+</html>
